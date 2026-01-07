@@ -1,0 +1,96 @@
+# ZigZag Prediction System Configuration
+
+data:
+  source: "huggingface"
+  hf_dataset_id: "zongowo111/v2-crypto-ohlcv-data"
+  hf_repo_type: "dataset"
+  cache_dir: ".cache/hf_data"
+  local_cache: "data/cache"
+  supported_timeframes:
+    - "15m"
+    - "1h"
+  refresh_interval: 300  # seconds
+
+indicators:
+  zigzag:
+    threshold: 0.5  # percentage threshold for ZigZag
+    min_length: 20  # minimum bars for valid zigzag point
+    predict_bars: 3  # how many bars ahead to predict
+    confidence_threshold: 0.65
+    use_hl2: true  # use (high+low)/2 for zigzag
+
+  technical:
+    rsi_period: 14
+    rsi_overbought: 70
+    rsi_oversold: 30
+    
+    macd:
+      fast: 12
+      slow: 26
+      signal: 9
+    
+    bollinger:
+      period: 20
+      std_dev: 2
+    
+    atr:
+      period: 14
+      multiplier: 2.0
+
+models:
+  lstm:
+    enabled: true
+    lookback_window: 60
+    hidden_units: 64
+    dropout: 0.2
+    epochs: 50
+    batch_size: 32
+    validation_split: 0.2
+    learning_rate: 0.001
+  
+  ensemble:
+    enabled: true
+    weights:
+      zigzag: 0.3
+      technical: 0.3
+      lstm: 0.4
+    min_agreement: 2  # minimum models that must agree
+
+signals:
+  early_warning_bars: 2  # how many bars before potential reversal
+  volume_confirmation: true
+  volume_threshold: 1.2  # compared to moving average
+  multi_timeframe: true  # check multiple timeframes
+  
+backtest:
+  initial_capital: 10000
+  risk_per_trade: 0.02  # 2% of capital
+  commission: 0.001  # 0.1% commission
+  slippage: 0.0005  # 0.05% slippage
+  max_concurrent_positions: 3
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/zigzag_system.log"
+  console_output: true
+  max_log_size: 10485760  # 10MB
+  backup_count: 5
+
+pairs:
+  - "BTCUSDT"
+  - "ETHUSDT"
+  - "BNBUSDT"
+  - "XRPUSDT"
+  - "ADAUSDT"
+
+alerts:
+  enabled: true
+  telegram:
+    enabled: false
+    token: ""
+    chat_id: ""
+  email:
+    enabled: false
+    smtp_server: ""
+    sender: ""
+    recipients: []
