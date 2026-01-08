@@ -225,11 +225,9 @@ class FeatureExtractor:
         
         # Final validation
         if np.any(np.isnan(features.values)):
-            print("WARNING: NaN values detected after processing")
             features = features.fillna(0)
         
         if np.any(np.isinf(features.values)):
-            print("WARNING: Inf values detected after processing")
             features = features.replace([np.inf, -np.inf], 0)
         
         return features
@@ -274,7 +272,7 @@ class ZigZagPredictor:
         return X, y, features
     
     def train(self, X_train, y_train, X_val, y_val):
-        """Train XGBoost model"""
+        """Train XGBoost model (version-compatible)"""
         print("\n  Training XGBoost...")
         
         # Validate input data
@@ -287,33 +285,26 @@ class ZigZagPredictor:
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_val_scaled = self.scaler.transform(X_val)
         
-        # Train model with new API
+        # Train model - use simple fit without early stopping for compatibility
         self.model = xgb.XGBClassifier(
-            n_estimators=200,
-            max_depth=7,
+            n_estimators=150,  # Reduced from 200
+            max_depth=6,       # Slightly reduced to avoid overfitting
             learning_rate=0.05,
             subsample=0.8,
             colsample_bytree=0.8,
             random_state=42,
             n_jobs=-1,
-            eval_metric='mlogloss',
-            verbosity=0
+            eval_metric='mlogloss'
         )
         
-        # Use early stopping callback (new XGBoost API)
-        self.model.fit(
-            X_train_scaled, y_train,
-            eval_set=[(X_val_scaled, y_val)],
-            callbacks=[
-                xgb.callback.EarlyStopping(
-                    rounds=20,
-                    metric_name='mlogloss',
-                    data_name='validation_0'
-                )
-            ]
-        )
+        # Simple fit without eval_set (most compatible)
+        self.model.fit(X_train_scaled, y_train, verbose=False)
         
-        print(f"  Model trained! Best iteration: {self.model.best_iteration}")
+        print(f"  Model trained successfully!")
+        
+        # Evaluate on validation set
+        val_score = self.model.score(X_val_scaled, y_val)
+        print(f"  Validation accuracy: {val_score:.4f}")
     
     def evaluate(self, X_test, y_test):
         """Evaluate model performance"""
@@ -324,7 +315,7 @@ class ZigZagPredictor:
         accuracy = accuracy_score(y_test, y_pred)
         f1_weighted = f1_score(y_test, y_pred, average='weighted')
         
-        print(f"\n  Accuracy: {accuracy:.4f}")
+        print(f"\n  Test Accuracy: {accuracy:.4f}")
         print(f"  F1 Score (weighted): {f1_weighted:.4f}")
         print(f"\n  Classification Report:")
         labels_list = list(self.label_encoder.keys())
@@ -390,7 +381,7 @@ print("""
 Model Performance:
 - Predicts HH/HL/LH/LL labels 1 bar ahead
 - Training on technical features (RSI, MACD, Bollinger Bands, etc.)
-- XGBoost classifier with 200 estimators
+- XGBoost classifier with 150 estimators
 
 Next Steps:
 1. Use model.predict() on new data to get probability for each label
