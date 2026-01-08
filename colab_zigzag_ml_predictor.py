@@ -355,7 +355,7 @@ except Exception as e:
 
 print("\n[2/6] Generating ZigZag labels...")
 zz = ZigZagFixed(depth=3, deviation=2)
-Extrema = zz.find_extrema(df['high'].values, df['low'].values)
+extrema = zz.find_extrema(df['high'].values, df['low'].values)
 zigzag = zz.filter_extrema(extrema)
 labeled_data = zz.get_labels_array(df, zigzag)
 print(f"  Found {np.sum(labeled_data != None)} labeled points")
