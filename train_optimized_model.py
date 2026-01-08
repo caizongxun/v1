@@ -49,22 +49,37 @@ if df.empty:
     print("❌ 数据为空！")
     exit(1)
 
-# 处理 yfinance 的多层级列名 (如果有的话)
+print(f"  时间范围: {df.index[0]} 到 {df.index[-1]}")
+
+# 处理列名 - 有效处理所有情况
+original_cols = list(df.columns)
+print(f"  原始列名: {original_cols}")
+
+# 处理 MultiIndex
 if isinstance(df.columns, pd.MultiIndex):
     df.columns = df.columns.droplevel(0)
+    print(f"  处理后: {list(df.columns)}")
 
-print(f"  时间范围: {df.index[0]} 到 {df.index[-1]}")
+# 转换列名为小写
+df.columns = [col.lower() if isinstance(col, str) else str(col).lower() for col in df.columns]
+
+print(f"  最终列名: {list(df.columns)}")
 print(f"  OHLCV 数据: ✓")
-print(f"  列: {list(df.columns)}")
-
-# 确保列名小写
-df.columns = df.columns.str.lower()
 
 print("\n" + "="*80)
 print("第 2 步: 生成 ZigZag 标签")
 print("="*80)
 
 def find_zigzag_labels(df, threshold=0.02):
+    # 需要的列
+    required_cols = ['close', 'high', 'low']
+    
+    # 检查列是否存在
+    for col in required_cols:
+        if col not in df.columns:
+            print(f"❌ 错误: 找不到列 '{col}', 实际列: {list(df.columns)}")
+            raise KeyError(f"Missing column: {col}")
+    
     close = df['close'].values
     high = df['high'].values
     low = df['low'].values
@@ -145,7 +160,7 @@ for i, name in enumerate(label_names):
     pct = count / len(df) * 100
     print(f"  {name}: {count:4d} ({pct:5.1f}%)")
 
-df_with_labels = df[df.index.to_series().rolling(window=2).count() >= 1].copy()
+df_with_labels = df.copy()
 print(f"\n有效样本: {len(df_with_labels)} 个")
 
 print("\n" + "="*80)
