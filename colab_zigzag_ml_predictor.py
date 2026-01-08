@@ -287,7 +287,7 @@ class ZigZagPredictor:
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_val_scaled = self.scaler.transform(X_val)
         
-        # Train model
+        # Train model with new API
         self.model = xgb.XGBClassifier(
             n_estimators=200,
             max_depth=7,
@@ -296,14 +296,21 @@ class ZigZagPredictor:
             colsample_bytree=0.8,
             random_state=42,
             n_jobs=-1,
-            eval_metric='mlogloss'
+            eval_metric='mlogloss',
+            verbosity=0
         )
         
+        # Use early stopping callback (new XGBoost API)
         self.model.fit(
             X_train_scaled, y_train,
             eval_set=[(X_val_scaled, y_val)],
-            verbose=False,
-            early_stopping_rounds=20
+            callbacks=[
+                xgb.callback.EarlyStopping(
+                    rounds=20,
+                    metric_name='mlogloss',
+                    data_name='validation_0'
+                )
+            ]
         )
         
         print(f"  Model trained! Best iteration: {self.model.best_iteration}")
