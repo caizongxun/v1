@@ -27,6 +27,11 @@ def zigzag(s, ut, dt):
     zzp = []
     
     for ix, ch, cl in zip(s.index, s['high'], s['low']):
+        # Initialize lp on first iteration
+        if lp is None:
+            lp = cl
+            continue
+        
         # No initial trend
         if tr is None:
             if ch / lp > ut:
@@ -53,10 +58,6 @@ def zigzag(s, ut, dt):
                 zzd.append(ld)
                 zzp.append(lp)
                 tr, ld, lp = 1, ix, ch
-        
-        # Initialize if needed
-        if tr is None and lp is None:
-            lp = cl if cl > 0 else 1
     
     # Extrapolate the current trend
     if zzd:
@@ -247,7 +248,7 @@ print(f"  價格範圍: {df['close'].min():.2f} - {df['close'].max():.2f}")
 
 print("\n[2/4] 比較不同的 percent_change 參數...")
 
-print(f"\n{'percent_change':>15s} {'extrema_count':>15s} {'description':>30s}")
+print(f"\n{'percent_change':>15s} {'extrema_count':>15s}")
 print("-" * 80)
 
 for pct in [1, 2, 3, 5, 7, 10]:
@@ -266,22 +267,23 @@ labels, extrema = generate_zigzag_labels(df, ut, dt)
 
 print(f"  OK 找到 {len(extrema)} 個極值點")
 
-print(f"\n  標籤分布:")
-hh = sum(1 for e in extrema if e['label'] == 'HH')
-hl = sum(1 for e in extrema if e['label'] == 'HL')
-lh = sum(1 for e in extrema if e['label'] == 'LH')
-ll = sum(1 for e in extrema if e['label'] == 'LL')
-print(f"    HH: {hh:4d}")
-print(f"    HL: {hl:4d}")
-print(f"    LH: {lh:4d}")
-print(f"    LL: {ll:4d}")
-print(f"    合計: {len(extrema):4d}")
+if len(extrema) > 0:
+    print(f"\n  標籤分布:")
+    hh = sum(1 for e in extrema if e['label'] == 'HH')
+    hl = sum(1 for e in extrema if e['label'] == 'HL')
+    lh = sum(1 for e in extrema if e['label'] == 'LH')
+    ll = sum(1 for e in extrema if e['label'] == 'LL')
+    print(f"    HH: {hh:4d}")
+    print(f"    HL: {hl:4d}")
+    print(f"    LH: {lh:4d}")
+    print(f"    LL: {ll:4d}")
+    print(f"    合計: {len(extrema):4d}")
+    
+    print(f"\n  最近的極值點 (Last 30):")
+    for i, ext in enumerate(extrema[-30:]):
+        print(f"    {i+1:2d}. Bar {ext['idx']:5d} | {ext['label']:2s} | Price: {ext['price']:10.2f}")
 
-print(f"\n  最近的極值點 (Last 30):")
-for i, ext in enumerate(extrema[-30:]):
-    print(f"    {i+1:2d}. Bar {ext['idx']:5d} | {ext['label']:2s} | Price: {ext['price']:10.2f}")
-
-print(f"\n[4/4] 創建可視化 (只顯示最近 100 根 K 線)...")
+print(f"\n[4/4] 創建可視化 (只顯示最近 100 根)...")
 fig, ax = visualize_zigzag(
     df,
     labels,
