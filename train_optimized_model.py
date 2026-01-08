@@ -49,8 +49,16 @@ if df.empty:
     print("❌ 数据为空！")
     exit(1)
 
+# 处理 yfinance 的多层级列名 (如果有的话)
+if isinstance(df.columns, pd.MultiIndex):
+    df.columns = df.columns.droplevel(0)
+
 print(f"  时间范围: {df.index[0]} 到 {df.index[-1]}")
 print(f"  OHLCV 数据: ✓")
+print(f"  列: {list(df.columns)}")
+
+# 确保列名小写
+df.columns = df.columns.str.lower()
 
 print("\n" + "="*80)
 print("第 2 步: 生成 ZigZag 标签")
