@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-資料集探索腳本 - 理解 HuggingFace 上的資料結構
+資料集探索腳本 - HuggingFace Crypto OHLCV Data
+修正: 檔案名小寫 btc_15m.parquet
 """
 
 import pandas as pd
@@ -14,7 +15,7 @@ print("="*80)
 # 設定
 REPO_ID = "zongowo111/v2-crypto-ohlcv-data"
 CRYPTO = "BTC"
-TIMEFRAME = "15m"  # 先用 15m 測試
+TIMEFRAME = "15m"  # 小寫
 
 print(f"\n目標資料:")
 print(f"  Repository: {REPO_ID}")
@@ -26,7 +27,8 @@ print("第 1 步: 下載資料")
 print("="*80)
 
 try:
-    filename = f"klines/{CRYPTO}USDT/{CRYPTO}_{TIMEFRAME.upper()}.parquet"
+    # 文件名小寫 + 大寫 USDT
+    filename = f"klines/{CRYPTO}USDT/{CRYPTO.lower()}_{TIMEFRAME}.parquet"
     print(f"\n下載路徑: {filename}")
     
     filepath = hf_hub_download(
@@ -39,7 +41,20 @@ try:
     
 except Exception as e:
     print(f"✗ 下載失敗: {e}")
-    exit(1)
+    print(f"\n嘗試替代路徑...")
+    try:
+        # 嘗試大寫
+        filename = f"klines/{CRYPTO}USDT/{CRYPTO}_{TIMEFRAME.upper()}.parquet"
+        print(f"嘗試: {filename}")
+        filepath = hf_hub_download(
+            repo_id=REPO_ID,
+            filename=filename,
+            repo_type="dataset"
+        )
+        print(f"✓ 下載成功: {filepath}")
+    except Exception as e2:
+        print(f"✗ 替代路徑也失敗: {e2}")
+        exit(1)
 
 print("\n" + "="*80)
 print("第 2 步: 讀取資料")
@@ -71,7 +86,8 @@ print("="*80)
 
 print(f"\n所有列名 ({len(df.columns)} 個):")
 for i, col in enumerate(df.columns, 1):
-    print(f"  {i:2d}. {col:20s} (dtype: {df[col].dtype})")
+    dtype = df[col].dtype
+    print(f"  {i}. {col:20s} (dtype: {dtype})")
 
 print("\n" + "="*80)
 print("第 5 步: 資料樣本")
@@ -98,7 +114,7 @@ else:
     print(missing[missing > 0])
 
 print("\n" + "="*80)
-print("第 7 步: 列名映射")
+print("第 7 步: 列名識別")
 print("="*80)
 
 print(f"\n嘗試識別 OHLCV 列...")
@@ -110,7 +126,7 @@ actual_cols = [col.lower().strip() for col in df.columns]
 
 print(f"\n實際列名 (小寫): {actual_cols}")
 
-# 嘗試自動映射
+# 自動映射
 for std_col in standard_cols:
     # 完全匹配
     if std_col in actual_cols:
@@ -125,8 +141,8 @@ for std_col in standard_cols:
         else:
             print(f"  ✗ {std_col:10s} -> 找不到對應的列")
 
-print(f"\n" + "="*80)
-print("第 8 步: 重新命名列")
+print("\n" + "="*80)
+print("第 8 步: 列重命名")
 print("="*80)
 
 if len(column_mapping) == 5:
@@ -135,16 +151,29 @@ if len(column_mapping) == 5:
     for std, actual in column_mapping.items():
         print(f"  {std:10s} <- {actual}")
     
+    # 獲取原始列名
+    reverse_mapping = {v: k for k, v in column_mapping.items()}
+    rename_dict = {}
+    for orig_col in df.columns:
+        lower_col = orig_col.lower().strip()
+        if lower_col in reverse_mapping:
+            rename_dict[orig_col] = reverse_mapping[lower_col]
+    
     # 重新命名
-    df_renamed = df.rename(columns={v: k for k, v in column_mapping.items()})
+    df_renamed = df.rename(columns=rename_dict)
     print(f"\n重新命名後的列名: {list(df_renamed.columns)}")
     
     print(f"\n重新命名後的前 5 筆資料:")
     print(df_renamed.head())
+    
+    print(f"\n✓ 資料已準備好進行訓練!")
+    print(f"  - 總樣本數: {len(df_renamed)}")
+    print(f"  - OHLCV 列: {list(df_renamed.columns)}")
+    
 else:
-    print(f"\n✗ 只找到 {len(column_mapping)} 個列，需要手動映射")
+    print(f"\n✗ 只找到 {len(column_mapping)} 個列,需要手動映射")
     print(f"\n實際可用的列:")
-    for col in actual_cols:
+    for col in df.columns:
         print(f"  - {col}")
 
 print("\n" + "="*80)
