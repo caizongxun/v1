@@ -178,7 +178,7 @@ class FeatureExtractor:
         features['sma_10'] = df['close'].rolling(10).mean()
         features['sma_20'] = df['close'].rolling(20).mean()
         
-        # MA ratios
+        # MA ratios - FIX: Handle division by zero
         features['price_to_sma5'] = df['close'] / features['sma_5']
         features['price_to_sma20'] = df['close'] / features['sma_20']
         features['sma5_to_sma20'] = features['sma_5'] / features['sma_20']
@@ -197,23 +197,42 @@ class FeatureExtractor:
         features['macd_signal'] = features['macd'].ewm(span=9, adjust=False).mean()
         features['macd_hist'] = features['macd'] - features['macd_signal']
         
-        # Bollinger Bands
+        # Bollinger Bands - FIX: Handle division by zero
         sma = df['close'].rolling(20).mean()
         std = df['close'].rolling(20).std()
         features['bb_upper'] = sma + 2 * std
         features['bb_lower'] = sma - 2 * std
         features['bb_width'] = features['bb_upper'] - features['bb_lower']
-        features['bb_position'] = (df['close'] - features['bb_lower']) / features['bb_width']
+        
+        # FIX: Avoid division by zero in bb_position
+        bb_width = features['bb_width'].copy()
+        bb_width[bb_width == 0] = 1e-6  # Replace zero with small value
+        features['bb_position'] = (df['close'] - features['bb_lower']) / bb_width
         
         # Directional features
         features['high_low_range'] = (df['high'] - df['low']) / df['close']
         features['close_range'] = (df['close'] - df['low']) / (df['high'] - df['low'])
         
         # Volume features
-        features['volume_sma_ratio'] = df['volume'] / df['volume'].rolling(20).mean()
+        vol_sma = df['volume'].rolling(20).mean()
+        vol_sma[vol_sma == 0] = 1e-6  # Replace zero with small value
+        features['volume_sma_ratio'] = df['volume'] / vol_sma
         features['volume_change'] = df['volume'].pct_change()
         
-        return features.fillna(0)
+        # FIX: Replace all inf and nan values
+        features = features.replace([np.inf, -np.inf], np.nan)
+        features = features.fillna(0)
+        
+        # Final validation
+        if np.any(np.isnan(features.values)):
+            print("WARNING: NaN values detected after processing")
+            features = features.fillna(0)
+        
+        if np.any(np.isinf(features.values)):
+            print("WARNING: Inf values detected after processing")
+            features = features.replace([np.inf, -np.inf], 0)
+        
+        return features
 
 
 class ZigZagPredictor:
@@ -257,6 +276,12 @@ class ZigZagPredictor:
     def train(self, X_train, y_train, X_val, y_val):
         """Train XGBoost model"""
         print("\n  Training XGBoost...")
+        
+        # Validate input data
+        if np.any(np.isnan(X_train)) or np.any(np.isinf(X_train)):
+            raise ValueError("X_train contains NaN or Inf values")
+        if np.any(np.isnan(X_val)) or np.any(np.isinf(X_val)):
+            raise ValueError("X_val contains NaN or Inf values")
         
         # Scale features
         X_train_scaled = self.scaler.fit_transform(X_train)
@@ -330,7 +355,7 @@ except Exception as e:
 
 print("\n[2/6] Generating ZigZag labels...")
 zz = ZigZagFixed(depth=3, deviation=2)
-extrema = zz.find_extrema(df['high'].values, df['low'].values)
+Extrema = zz.find_extrema(df['high'].values, df['low'].values)
 zigzag = zz.filter_extrema(extrema)
 labeled_data = zz.get_labels_array(df, zigzag)
 print(f"  Found {np.sum(labeled_data != None)} labeled points")
