@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
 ZigZag 模型优化 - 完整训练脚本
-可直接执行，包含所有 4 个优化方法
+使用 HuggingFace 上的 parquet 数据
 """
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 import xgboost as xgb
 import warnings
 import time
+from huggingface_hub import hf_hub_download
 
 warnings.filterwarnings('ignore')
 
@@ -20,29 +20,43 @@ print("\n" + "="*80)
 print("ZigZag 模型完整优化 - 训练脚本")
 print("="*80)
 
-CRYPTO = 'BTC-USD'
-PERIOD = '2y'
-INTERVAL = '1h'
+# 配置
+ REPO_ID = "zongowo111/v2-crypto-ohlcv-data"
+CRYPTO = "BTC"
+TIMEFRAME = "1h"
 Random_STATE = 42
 TEST_SIZE = 0.2
 
 print(f"\n数据配置:")
+print(f"  数据源: HuggingFace Dataset")
 print(f"  币种: {CRYPTO}")
-print(f"  周期: {PERIOD}")
-print(f"  时间框架: {INTERVAL}")
+print(f"  时间框架: {TIMEFRAME}")
 
 print("\n" + "="*80)
-print("第 1 步: 获取历史数据")
+print("第 1 步: 下载数据")
 print("="*80)
 
 start_time = time.time()
 
 try:
-    print(f"正在下载 {CRYPTO} {PERIOD} 的 {INTERVAL} K线数据...")
-    df = yf.download(CRYPTO, period=PERIOD, interval=INTERVAL, progress=False)
-    print(f"✓ 成功获取 {len(df)} 根 K线")
+    print(f"正在下载 {CRYPTO} {TIMEFRAME} 数据...")
+    
+    # HuggingFace 文件路径
+    filename = f"klines/{CRYPTO}USDT/{CRYPTO}_{TIMEFRAME.upper()}.parquet"
+    
+    # 下载文件
+    filepath = hf_hub_download(
+        repo_id=REPO_ID,
+        filename=filename,
+        repo_type="dataset"
+    )
+    
+    # 读取 parquet 文件
+    df = pd.read_parquet(filepath)
+    print(f"✓ 成功下载 {len(df)} 根 K线")
+    
 except Exception as e:
-    print(f"✗ 数据获取失败: {e}")
+    print(f"✗ 数据下载失败: {e}")
     exit(1)
 
 if df.empty:
@@ -50,38 +64,8 @@ if df.empty:
     exit(1)
 
 print(f"  时间范围: {df.index[0]} 到 {df.index[-1]}")
-
-# 重要：处理列名，确保为小写且不含空格
-try:
-    # 如果是 MultiIndex，取第一层
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.droplevel(0)
-    
-    # 转换为小写
-    df.columns = [col.lower().strip() for col in df.columns]
-    
-    # 检查必需列
-    required = ['open', 'high', 'low', 'close', 'volume']
-    for col in required:
-        if col not in df.columns:
-            print(f"✗ 缺少列: {col}，实际列名: {list(df.columns)}")
-            # 尝试自动映射
-            col_map = {
-                'adj close': 'close',
-                'adjclose': 'close',
-            }
-            for old, new in col_map.items():
-                if old in df.columns:
-                    df.rename(columns={old: new}, inplace=True)
-                    print(f"  自动映射: {old} → {new}")
-    
-    print(f"  列名: {list(df.columns)}")
-    print(f"  OHLCV 数据: ✓")
-    
-except Exception as e:
-    print(f"✗ 列处理失败: {e}")
-    print(f"  原始列名: {list(df.columns)}")
-    exit(1)
+print(f"  列名: {list(df.columns)}")
+print(f"  OHLCV 数据: ✓")
 
 print("\n" + "="*80)
 print("第 2 步: 生成 ZigZag 标签")
