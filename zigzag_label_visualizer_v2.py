@@ -18,7 +18,7 @@ def generate_zigzag_labels_tradingview_v2(df, depth=12, deviation=5, backstep=2)
     1. 找到局部極值點
     2. 如果偏離前一個極值點超過 deviation %，才記錄為新的轉折點
     3. 在上升趨勢中，只記錄「高點突破」為 HH
-    4. 在上升趨勢中，低點突破時才轉向，記錄為 LH
+    4. 在上升趨勢中，低點突破時轉向，記錄為 LH
     """
     
     n = len(df)
@@ -123,25 +123,43 @@ def generate_zigzag_labels_tradingview_v2(df, depth=12, deviation=5, backstep=2)
     
     return labels, extrema
 
-def visualize_zigzag(df, labels, extrema, title="ZigZag Pattern Visualization", figsize=(20, 8)):
+def visualize_zigzag(df, labels, extrema, title="ZigZag Pattern Visualization", figsize=(20, 8), start_idx=None, num_bars=100):
     """
     可視化 ZigZag 標籤
     
     顏色編碼:
-    - 藍色: HH (Higher High) - 上升趨勢中的新高
-    - 橙色: HL (Higher Low) - 上升轉向時的低點
-    - 綠色: LH (Lower High) - 下降趨勢開始時的高點
-    - 紅色: LL (Lower Low) - 下降趨勢中的新低
+    - 藍色: HH (Higher High) - 上升趨勢新高
+    - 橙色: HL (Higher Low) - 上升轉向低點
+    - 綠色: LH (Lower High) - 下降轉向高點
+    - 紅色: LL (Lower Low) - 下降趨勢新低
     """
     
     fig, ax = plt.subplots(figsize=figsize)
     
     df_plot = df.reset_index(drop=True)
     
-    # 畫K線
-    ax.plot(df_plot.index, df_plot['high'], color='lightgray', linewidth=0.5, alpha=0.3)
-    ax.plot(df_plot.index, df_plot['low'], color='lightgray', linewidth=0.5, alpha=0.3)
-    ax.plot(df_plot.index, df_plot['close'], color='black', linewidth=1.5, alpha=0.8)
+    # 如果沒指定起始位置，就顯示最後 num_bars 根
+    if start_idx is None:
+        start_idx = max(0, len(df_plot) - num_bars)
+    
+    end_idx = min(start_idx + num_bars, len(df_plot))
+    df_segment = df_plot.iloc[start_idx:end_idx].copy()
+    df_segment = df_segment.reset_index(drop=True)
+    
+    # 調整 extrema 的索引
+    extrema_segment = []
+    for ext in extrema:
+        if start_idx <= ext['idx'] < end_idx:
+            extrema_segment.append({
+                'idx': ext['idx'] - start_idx,
+                'price': ext['price'],
+                'label': ext['label']
+            })
+    
+    # 繪製 K 線
+    ax.plot(df_segment.index, df_segment['high'], color='lightgray', linewidth=0.5, alpha=0.3)
+    ax.plot(df_segment.index, df_segment['low'], color='lightgray', linewidth=0.5, alpha=0.3)
+    ax.plot(df_segment.index, df_segment['close'], color='black', linewidth=1.5, alpha=0.8)
     
     # 顏色映射
     label_colors = {
@@ -152,7 +170,7 @@ def visualize_zigzag(df, labels, extrema, title="ZigZag Pattern Visualization", 
     }
     
     # 繪製極值點
-    for ext in extrema:
+    for ext in extrema_segment:
         idx = ext['idx']
         price = ext['price']
         label = ext['label']
@@ -165,9 +183,9 @@ def visualize_zigzag(df, labels, extrema, title="ZigZag Pattern Visualization", 
         # 添加標籤文字
         ax.text(idx, price * 1.015, label, ha='center', va='bottom', fontsize=10, fontweight='bold', color='black')
     
-    # 繪製ZigZag連線
-    if len(extrema) > 1:
-        sorted_extrema = sorted(extrema, key=lambda x: x['idx'])
+    # 繪製 ZigZag 連線
+    if len(extrema_segment) > 1:
+        sorted_extrema = sorted(extrema_segment, key=lambda x: x['idx'])
         for i in range(len(sorted_extrema) - 1):
             x1, y1 = sorted_extrema[i]['idx'], sorted_extrema[i]['price']
             x2, y2 = sorted_extrema[i+1]['idx'], sorted_extrema[i+1]['price']
@@ -180,7 +198,7 @@ def visualize_zigzag(df, labels, extrema, title="ZigZag Pattern Visualization", 
     
     # 設置圖表
     ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
-    ax.set_xlabel('Bar Index', fontsize=12)
+    ax.set_xlabel('Bar Index (from start of window)', fontsize=12)
     ax.set_ylabel('Price (USD)', fontsize=12)
     ax.grid(True, alpha=0.3, linestyle='--')
     
@@ -196,7 +214,7 @@ def visualize_zigzag(df, labels, extrema, title="ZigZag Pattern Visualization", 
     plt.tight_layout()
     return fig, ax
 
-def print_label_statistics(labels, extrema):
+def print_label_statistics(labels, extrema, window_size=100):
     """
     打印標籤統計
     """
@@ -209,14 +227,15 @@ def print_label_statistics(labels, extrema):
     
     print(f"\nTotal bars: {len(labels):,}")
     print(f"Total extrema points: {len(extrema):,}")
+    print(f"Extrema density: {len(extrema)/len(labels)*100:.2f}% of bars")
     
-    print(f"\nLabel Distribution:")
+    print(f"\nLabel Distribution (全部):")
     for i in range(5):
         count = (labels == i).sum()
         pct = 100 * count / len(labels)
         print(f"  {i}. {label_names[i]:12s}: {count:6d} ({pct:5.2f}%)")
     
-    # 極值點分布
+    # 極值點分佈
     print(f"\nExtrema Points by Type:")
     hh_count = sum(1 for e in extrema if e['label'] == 'HH')
     hl_count = sum(1 for e in extrema if e['label'] == 'HL')
@@ -227,15 +246,12 @@ def print_label_statistics(labels, extrema):
     print(f"  HL (Higher Low):      {hl_count:4d}")
     print(f"  LH (Lower High):      {lh_count:4d}")
     print(f"  LL (Lower Low):       {ll_count:4d}")
-    print(f"  ───────────────────")
+    print(f"  ─────────────────────────")
     print(f"  Total Extrema:        {len(extrema):4d}")
     
-    print(f"\nExtreme Point Details:")
-    for i, ext in enumerate(extrema[:30]):
+    print(f"\nRecent Extrema Points (Last 30):")
+    for i, ext in enumerate(extrema[-30:]):
         print(f"  {i+1:2d}. Bar {ext['idx']:5d} | {ext['label']:2s} | Price: {ext['price']:10.2f}")
-    
-    if len(extrema) > 30:
-        print(f"  ... and {len(extrema) - 30} more")
 
 def compare_deviations(df, deviations=[1, 2, 3, 5, 7, 10]):
     """
@@ -282,20 +298,20 @@ def compare_deviations(df, deviations=[1, 2, 3, 5, 7, 10]):
 # ============================================================================
 
 print("="*70)
-print("ZigZag Label Visualizer v2 - Corrected Logic")
+print("ZigZag Label Visualizer v2 - 只顯示最近 100 根 K 線")
 print("="*70)
 
-print("\n[1/5] Fetching market data...")
+print("\n[1/5] 獲取市場數據...")
 try:
     df = yf.download('BTC-USD', period='2y', interval='1h', progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df = df.reset_index()
     df.columns = [c.lower().strip() for c in df.columns]
-    print(f"  OK Loaded {len(df):,} candles")
+    print(f"  OK 加載 {len(df):,} 根 K 線")
 except Exception as e:
-    print(f"  Error: {e}")
-    print(f"  Using synthetic data...")
+    print(f"  錯誤: {e}")
+    print(f"  使用合成數據...")
     np.random.seed(42)
     n = 2000
     dates = pd.date_range(end=pd.Timestamp.now(), periods=n, freq='1H')
@@ -309,33 +325,34 @@ except Exception as e:
         'volume': np.random.uniform(100000, 500000, n)
     })
 
-print(f"  Date range: {df['datetime'].iloc[0]} to {df['datetime'].iloc[-1]}")
-print(f"  Price range: {df['close'].min():.2f} - {df['close'].max():.2f}")
+print(f"  時間範圍: {df['datetime'].iloc[0]} 至 {df['datetime'].iloc[-1]}")
+print(f"  價格範圍: {df['close'].min():.2f} - {df['close'].max():.2f}")
 
-print("\n[2/5] Comparing different deviation parameters...")
+print("\n[2/5] 比較不同的 deviation 參數...")
 comparison_results = compare_deviations(df, deviations=[1, 2, 3, 5, 7, 10])
 
 # 選擇 5% 作為主要參數
 deviation_choice = 5
-print(f"\n[3/5] Generating labels with deviation={deviation_choice}%...")
+print(f"\n[3/5] 用 deviation={deviation_choice}% 生成標籤...")
 labels, extrema = generate_zigzag_labels_tradingview_v2(df, depth=12, deviation=deviation_choice, backstep=2)
-print(f"  OK Found {len(extrema)} extrema points")
+print(f"  OK 找到 {len(extrema)} 個極值點")
 
-print(f"\n[4/5] Printing statistics...")
+print(f"\n[4/5] 打印統計...")
 print_label_statistics(labels, extrema)
 
-print(f"\n[5/5] Creating visualization...")
+print(f"\n[5/5] 創建可視化 (只顯示最近 100 根)...")
 fig, ax = visualize_zigzag(
     df,
     labels,
     extrema,
-    title=f"ZigZag Pattern Visualization (Deviation={deviation_choice}%) - TradingView Logic",
-    figsize=(22, 10)
+    title=f"ZigZag 模式可視化 (Deviation={deviation_choice}%) - 最近 100 根 K 線",
+    figsize=(20, 10),
+    num_bars=100
 )
 plt.show()
 
 print("\n" + "="*70)
-print("Visualization complete!")
+print("可視化完成!")
 print("="*70)
 
 # 保存標籤到 CSV
@@ -349,9 +366,9 @@ df_output['label_name'] = df_output['zigzag_label'].map({
     4: 'No Pattern'
 })
 
-print(f"\nSaving labels to 'zigzag_labels_v2.csv'...")
+print(f"\n保存標籤到 'zigzag_labels_v2.csv'...")
 df_output.to_csv('zigzag_labels_v2.csv', index=False)
-print(f"  OK Saved")
+print(f"  OK 已保存")
 
 print(f"\n下一步:")
 print(f"  1. 如果信號數量不對，調整 deviation_choice (試試 2, 3, 5, 7)")
